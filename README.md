@@ -53,7 +53,7 @@ shkvm exec "echo hello" -w 2        # run command and read output
 
 | Command | Description |
 |---|---|
-| `shkvm type TEXT [-d MS]` | Type text with optional char delay. Supports inline tags: `{enter}`, `{tab}`, `{ctrl+c}`, `{0xNN}` |
+| `shkvm type TEXT [-d MS] [-r]` | Type text with optional char delay. Supports inline tags: `{enter}`, `{tab}`, `{ctrl+c}`, `{0xNN}`. Whitelist-based: unknown `{content}` passes through literally. `-r` (raw mode) disables tags, `\n` → Enter |
 | `shkvm key KEY [-m MOD]` | Send single key press. `-m` can be repeated: `-m ctrl -m shift` |
 | `shkvm keys JSON [-d MS]` | Send key sequence from JSON array |
 

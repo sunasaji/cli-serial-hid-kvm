@@ -66,13 +66,13 @@ class TestCmdType:
         args = parser.parse_args(["type", "hello"])
         rc = cmd_type(args)
         assert rc == 0
-        mock_client.type_text.assert_called_once_with("hello", None)
+        mock_client.type_text.assert_called_once_with("hello", None, raw=False)
         assert "5 characters" in capsys.readouterr().out
 
     def test_with_delay(self, parser, mock_client):
         args = parser.parse_args(["type", "hi", "-d", "50"])
         cmd_type(args)
-        mock_client.type_text.assert_called_once_with("hi", 50)
+        mock_client.type_text.assert_called_once_with("hi", 50, raw=False)
 
 
 class TestCmdKey:
@@ -214,7 +214,7 @@ class TestCmdExec:
             args = parser.parse_args(["exec", "ls -la", "-w", "2"])
             rc = cmd_exec(args)
             assert rc == 0
-            mock_client.type_text.assert_called_once_with("ls -la")
+            mock_client.type_text.assert_called_once_with("ls -la", raw=True)
             mock_client.send_key.assert_called_once_with("enter")
             assert "output text" in capsys.readouterr().out
 

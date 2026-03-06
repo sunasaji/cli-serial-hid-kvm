@@ -67,7 +67,7 @@ def _error(msg: str) -> int:
 
 def cmd_type(args: argparse.Namespace) -> int:
     client = get_client()
-    client.type_text(args.text, args.delay)
+    client.type_text(args.text, args.delay, raw=args.raw)
     print(f"Typed {len(args.text)} characters")
     return 0
 
@@ -155,7 +155,8 @@ def cmd_ocr(args: argparse.Namespace) -> int:
 
 def cmd_exec(args: argparse.Namespace) -> int:
     client = get_client()
-    client.type_text(args.command)
+    # Raw mode: no tag interpretation for command text
+    client.type_text(args.command, raw=True)
     time.sleep(0.1)
     client.send_key("enter")
     time.sleep(args.wait)
@@ -213,6 +214,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("type", help="Type text with inline tags")
     p.add_argument("text", help='Text to type, e.g. "ls -la{enter}"')
     p.add_argument("-d", "--delay", type=int, default=None, help="Delay between chars (ms)")
+    p.add_argument("-r", "--raw", action="store_true",
+                   help="Disable tag interpretation; newlines become Enter")
     p.set_defaults(func=cmd_type)
 
     # key
