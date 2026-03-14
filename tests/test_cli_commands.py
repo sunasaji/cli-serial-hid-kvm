@@ -9,6 +9,7 @@ from PIL import Image
 
 from cli_serial_hid_kvm.cli import (
     build_parser,
+    _read_input,
     cmd_type,
     cmd_key,
     cmd_keys,
@@ -48,7 +49,9 @@ def patch_globals(mock_client):
         mock.patch("cli_serial_hid_kvm.cli.get_client", return_value=mock_client),
         mock.patch("cli_serial_hid_kvm.cli._save_capture_log", return_value=None),
         mock.patch("cli_serial_hid_kvm.cli._capture_image") as mock_cap,
+        mock.patch("cli_serial_hid_kvm.cli.sys.stdin") as mock_stdin,
     ):
+        mock_stdin.isatty.return_value = True
         mock_cap.return_value = Image.new("RGB", (64, 48), color="black")
         yield
 
@@ -56,6 +59,34 @@ def patch_globals(mock_client):
 @pytest.fixture
 def parser():
     return build_parser()
+
+
+# ── Stdin input helper ─────────────────────────────────────────────────
+
+
+class TestReadInput:
+    def test_arg_provided(self):
+        with mock.patch("cli_serial_hid_kvm.cli.sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = True
+            assert _read_input("hello", "text") == "hello"
+
+    def test_stdin_provided(self):
+        with mock.patch("cli_serial_hid_kvm.cli.sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = False
+            mock_stdin.read.return_value = "from stdin"
+            assert _read_input(None, "text") == "from stdin"
+
+    def test_both_arg_and_stdin_errors(self):
+        with mock.patch("cli_serial_hid_kvm.cli.sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = False
+            with pytest.raises(SystemExit, match="both as argument and via stdin"):
+                _read_input("hello", "text")
+
+    def test_neither_arg_nor_stdin_errors(self):
+        with mock.patch("cli_serial_hid_kvm.cli.sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = True
+            with pytest.raises(SystemExit, match="required as argument or via stdin"):
+                _read_input(None, "text")
 
 
 # ── Keyboard ──────────────────────────────────────────────────────────
@@ -73,6 +104,16 @@ class TestCmdType:
         args = parser.parse_args(["type", "hi", "-d", "50"])
         cmd_type(args)
         mock_client.type_text.assert_called_once_with("hi", 50, raw=False)
+
+    def test_from_stdin(self, parser, mock_client, capsys):
+        args = parser.parse_args(["type"])
+        with mock.patch("cli_serial_hid_kvm.cli.sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = False
+            mock_stdin.read.return_value = "stdin text"
+            rc = cmd_type(args)
+        assert rc == 0
+        mock_client.type_text.assert_called_once_with("stdin text", None, raw=False)
+        assert "10 characters" in capsys.readouterr().out
 
 
 class TestCmdKey:
@@ -100,6 +141,18 @@ class TestCmdKeys:
             [{"key": "a"}, {"key": "b"}], 100,
         )
         assert "2 key steps" in capsys.readouterr().out
+
+    def test_from_stdin(self, parser, mock_client, capsys):
+        args = parser.parse_args(["keys"])
+        with mock.patch("cli_serial_hid_kvm.cli.sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = False
+            mock_stdin.read.return_value = '[{"key":"enter"}]'
+            rc = cmd_keys(args)
+        assert rc == 0
+        mock_client.send_key_sequence.assert_called_once_with(
+            [{"key": "enter"}], 100,
+        )
+        assert "1 key steps" in capsys.readouterr().out
 
 
 # ── Mouse ─────────────────────────────────────────────────────────────

@@ -8,10 +8,12 @@
 ```
 shkvm type "ls -la{enter}"              # type text (supports {enter}, {tab}, {ctrl+c}, {0xNN})
 shkvm type "hello" -d 50                # with 50ms char delay
+echo "ls -la{enter}" | shkvm type       # text from stdin
 shkvm key enter                         # single key press
 shkvm key c -m ctrl                     # Ctrl+C
 shkvm key f4 -m alt                     # Alt+F4
 shkvm keys '[{"key":"a"},{"key":"b"}]'  # key sequence (JSON)
+cat seq.json | shkvm keys               # JSON from stdin
 ```
 
 ### Mouse

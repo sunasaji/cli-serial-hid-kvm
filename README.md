@@ -42,6 +42,7 @@ serial-hid-kvm --headless --api
 # Use shkvm from any machine that can reach the server
 shkvm info                          # check connection
 shkvm type "ls -la{enter}"          # type on target PC
+echo "ls -la{enter}" | shkvm type   # same, via stdin
 shkvm capture -o screen.jpg         # take screenshot
 shkvm ocr                           # read screen text
 shkvm exec "echo hello" -w 2        # run command and read output
@@ -53,9 +54,9 @@ shkvm exec "echo hello" -w 2        # run command and read output
 
 | Command | Description |
 |---|---|
-| `shkvm type TEXT [-d MS] [-r]` | Type text with optional char delay. Supports inline tags: `{enter}`, `{tab}`, `{ctrl+c}`, `{0xNN}`. Whitelist-based: unknown `{content}` passes through literally. `-r` (raw mode) disables tags, `\n` → Enter |
+| `shkvm type [TEXT] [-d MS] [-r]` | Type text with optional char delay. Supports inline tags: `{enter}`, `{tab}`, `{ctrl+c}`, `{0xNN}`. Whitelist-based: unknown `{content}` passes through literally. `-r` (raw mode) disables tags, `\n` → Enter. Text can be passed via stdin instead of argument |
 | `shkvm key KEY [-m MOD]` | Send single key press. `-m` can be repeated: `-m ctrl -m shift` |
-| `shkvm keys JSON [-d MS]` | Send key sequence from JSON array |
+| `shkvm keys [JSON] [-d MS]` | Send key sequence from JSON array. JSON can be passed via stdin instead of argument |
 
 ### Mouse
 
@@ -82,6 +83,23 @@ shkvm exec "echo hello" -w 2        # run command and read output
 | `shkvm devices` | List capture devices |
 | `shkvm set-device DEV` | Switch capture device by index or path |
 | `shkvm set-resolution W H` | Set capture resolution |
+
+### Stdin Support
+
+`type` and `keys` accept input from stdin instead of a positional argument. If both are provided, the command exits with an error.
+
+```bash
+# Pass text via stdin
+echo "hello world" | shkvm type
+cat script.txt | shkvm type -r
+
+# Pass JSON via stdin
+echo '[{"key":"enter"}]' | shkvm keys
+cat sequence.json | shkvm keys -d 200
+
+# Error: both argument and stdin
+echo "hello" | shkvm type "world"   # => Error
+```
 
 ### Global Options
 

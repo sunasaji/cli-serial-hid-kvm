@@ -65,10 +65,24 @@ def _error(msg: str) -> int:
 # ── Subcommand handlers ──────────────────────────────────────────────
 
 
+def _read_input(arg_value: str | None, label: str) -> str:
+    """Return arg_value or stdin content; error if both or neither are given."""
+    has_arg = arg_value is not None
+    has_stdin = not sys.stdin.isatty()
+    if has_arg and has_stdin:
+        raise SystemExit(f"Error: {label} provided both as argument and via stdin")
+    if not has_arg and not has_stdin:
+        raise SystemExit(f"Error: {label} required as argument or via stdin")
+    if has_arg:
+        return arg_value
+    return sys.stdin.read()
+
+
 def cmd_type(args: argparse.Namespace) -> int:
     client = get_client()
-    client.type_text(args.text, args.delay, raw=args.raw)
-    print(f"Typed {len(args.text)} characters")
+    text = _read_input(args.text, "text")
+    client.type_text(text, args.delay, raw=args.raw)
+    print(f"Typed {len(text)} characters")
     return 0
 
 
@@ -83,7 +97,8 @@ def cmd_key(args: argparse.Namespace) -> int:
 
 def cmd_keys(args: argparse.Namespace) -> int:
     client = get_client()
-    steps = json.loads(args.steps_json)
+    steps_json = _read_input(args.steps_json, "steps_json")
+    steps = json.loads(steps_json)
     default_delay = args.delay or 100
     client.send_key_sequence(steps, default_delay)
     print(f"Sent {len(steps)} key steps")
@@ -212,7 +227,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # type
     p = sub.add_parser("type", help="Type text with inline tags")
-    p.add_argument("text", help='Text to type, e.g. "ls -la{enter}"')
+    p.add_argument("text", nargs="?", default=None, help='Text to type, e.g. "ls -la{enter}"')
     p.add_argument("-d", "--delay", type=int, default=None, help="Delay between chars (ms)")
     p.add_argument("-r", "--raw", action="store_true",
                    help="Disable tag interpretation; newlines become Enter")
@@ -226,7 +241,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # keys
     p = sub.add_parser("keys", help="Send a key sequence (JSON)")
-    p.add_argument("steps_json", help='JSON array, e.g. \'[{"key":"a"},{"key":"b"}]\'')
+    p.add_argument("steps_json", nargs="?", default=None, help='JSON array, e.g. \'[{"key":"a"},{"key":"b"}]\'')
     p.add_argument("-d", "--delay", type=int, default=None, help="Default delay between steps (ms)")
     p.set_defaults(func=cmd_keys)
 
