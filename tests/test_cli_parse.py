@@ -36,6 +36,25 @@ class TestTypeCommand:
         args = parser.parse_args(["type", "hello", "-d", "50"])
         assert args.delay == 50
 
+    def test_raw_flag(self, parser):
+        args = parser.parse_args(["type", "-r", "hello"])
+        assert args.raw is True
+
+    def test_file_option(self, parser):
+        args = parser.parse_args(["type", "--file", "input.txt"])
+        assert args.file == "input.txt"
+        assert args.text is None
+
+    def test_file_dash_stdin(self, parser):
+        args = parser.parse_args(["type", "-f", "-"])
+        assert args.file == "-"
+        assert args.text is None
+
+    def test_tags_flag(self, parser):
+        args = parser.parse_args(["type", "-t", "-f", "input.txt"])
+        assert args.tags is True
+        assert args.raw is False
+
 
 class TestKeyCommand:
     def test_basic(self, parser):

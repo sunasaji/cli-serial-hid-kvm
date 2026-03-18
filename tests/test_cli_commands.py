@@ -7,24 +7,11 @@ from unittest import mock
 import pytest
 from PIL import Image
 
-from cli_serial_hid_kvm.cli import (
-    build_parser,
-    _read_input,
-    cmd_type,
-    cmd_key,
-    cmd_keys,
-    cmd_move,
-    cmd_click,
-    cmd_drag,
-    cmd_scroll,
-    cmd_capture,
-    cmd_ocr,
-    cmd_exec,
-    cmd_info,
-    cmd_devices,
-    cmd_set_device,
-    cmd_set_resolution,
-)
+from cli_serial_hid_kvm.cli import (_read_input, build_parser, cmd_capture,
+                                    cmd_click, cmd_devices, cmd_drag, cmd_exec,
+                                    cmd_info, cmd_key, cmd_keys, cmd_move,
+                                    cmd_ocr, cmd_scroll, cmd_set_device,
+                                    cmd_set_resolution, cmd_type)
 
 
 def _make_jpeg_bytes() -> bytes:
@@ -76,11 +63,11 @@ class TestReadInput:
             mock_stdin.read.return_value = "from stdin"
             assert _read_input(None, "text") == "from stdin"
 
-    def test_both_arg_and_stdin_errors(self):
+    def test_arg_wins_over_stdin(self):
         with mock.patch("cli_serial_hid_kvm.cli.sys.stdin") as mock_stdin:
             mock_stdin.isatty.return_value = False
-            with pytest.raises(SystemExit, match="both as argument and via stdin"):
-                _read_input("hello", "text")
+            mock_stdin.read.return_value = ""
+            assert _read_input("hello", "text") == "hello"
 
     def test_neither_arg_nor_stdin_errors(self):
         with mock.patch("cli_serial_hid_kvm.cli.sys.stdin") as mock_stdin:
@@ -105,15 +92,99 @@ class TestCmdType:
         cmd_type(args)
         mock_client.type_text.assert_called_once_with("hi", 50, raw=False)
 
-    def test_from_stdin(self, parser, mock_client, capsys):
+    def test_stdin_input(self, parser, mock_client, capsys):
+        """Stdin input: reads line by line, defaults to raw mode."""
         args = parser.parse_args(["type"])
         with mock.patch("cli_serial_hid_kvm.cli.sys.stdin") as mock_stdin:
             mock_stdin.isatty.return_value = False
-            mock_stdin.read.return_value = "stdin text"
+            mock_stdin.__iter__ = mock.MagicMock(return_value=iter(["line1\n", "line2\n"]))
             rc = cmd_type(args)
         assert rc == 0
-        mock_client.type_text.assert_called_once_with("stdin text", None, raw=False)
-        assert "10 characters" in capsys.readouterr().out
+        assert mock_client.type_text.call_count == 2
+        # stdin defaults to raw=True
+        mock_client.type_text.assert_any_call(
+            "line1\n", None, raw=True,
+        )
+        assert "12 characters" in capsys.readouterr().out
+
+    def test_text_arg_wins_over_stdin(self, parser, mock_client, capsys):
+        """Both text arg and stdin: text arg wins, stdin is drained."""
+        args = parser.parse_args(["type", "hello"])
+        with mock.patch("cli_serial_hid_kvm.cli.sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = False
+            mock_stdin.read.return_value = ""
+            rc = cmd_type(args)
+        assert rc == 0
+        mock_client.type_text.assert_called_once_with(
+            "hello", None, raw=False,
+        )
+        assert "5 characters" in capsys.readouterr().out
+
+    def test_neither_text_nor_stdin_errors(self, parser, mock_client, capsys):
+        """No text arg and no stdin: returns error."""
+        args = parser.parse_args(["type"])
+        rc = cmd_type(args)
+        assert rc == 1
+        assert "text required" in capsys.readouterr().err
+
+    def test_file_dash_reads_stdin(self, parser, mock_client, capsys):
+        """--file='-' streams from stdin."""
+        args = parser.parse_args(["type", "-f", "-"])
+        with mock.patch("cli_serial_hid_kvm.cli.sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = False
+            mock_stdin.__iter__ = mock.MagicMock(return_value=iter(["abc\n"]))
+            rc = cmd_type(args)
+        assert rc == 0
+        mock_client.type_text.assert_called_once()
+        assert "4 characters" in capsys.readouterr().out
+
+    def test_file_option(self, parser, mock_client, capsys, tmp_path):
+        """--file reads text from file, defaults to raw mode."""
+        f = tmp_path / "input.txt"
+        f.write_text("file content{enter}", encoding="utf-8")
+        args = parser.parse_args(["type", "-f", str(f)])
+        rc = cmd_type(args)
+        assert rc == 0
+        mock_client.type_text.assert_called_once_with(
+            "file content{enter}", None, raw=True,
+        )
+        assert "19 characters" in capsys.readouterr().out
+
+    def test_file_with_tags_flag(self, parser, mock_client, capsys, tmp_path):
+        """--file with --tags enables tag interpretation."""
+        f = tmp_path / "input.txt"
+        f.write_text("hello{enter}", encoding="utf-8")
+        args = parser.parse_args(["type", "-f", str(f), "-t"])
+        rc = cmd_type(args)
+        assert rc == 0
+        mock_client.type_text.assert_called_once_with(
+            "hello{enter}", None, raw=False,
+        )
+
+    def test_stdin_with_tags_flag(self, parser, mock_client, capsys):
+        """Stdin with --tags enables tag interpretation."""
+        args = parser.parse_args(["type", "-t"])
+        with mock.patch("cli_serial_hid_kvm.cli.sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = False
+            mock_stdin.__iter__ = mock.MagicMock(return_value=iter(["hello{enter}\n"]))
+            rc = cmd_type(args)
+        assert rc == 0
+        mock_client.type_text.assert_called_once_with(
+            "hello{enter}\n", None, raw=False,
+        )
+
+    def test_file_option_ignores_stdin(self, parser, mock_client, capsys, tmp_path):
+        """--file takes priority over stdin."""
+        f = tmp_path / "input.txt"
+        f.write_text("from file", encoding="utf-8")
+        args = parser.parse_args(["type", "-f", str(f)])
+        with mock.patch("cli_serial_hid_kvm.cli.sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = False
+            rc = cmd_type(args)
+        assert rc == 0
+        mock_client.type_text.assert_called_once_with(
+            "from file", None, raw=True,
+        )
 
 
 class TestCmdKey:

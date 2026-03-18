@@ -6,15 +6,33 @@
 
 ### Keyboard
 ```
-shkvm type "ls -la{enter}"              # type text (supports {enter}, {tab}, {ctrl+c}, {0xNN})
-shkvm type "hello" -d 50                # with 50ms char delay
-echo "ls -la{enter}" | shkvm type       # text from stdin
+shkvm type "ls -la{enter}"              # type text (tag mode, default for text arg)
+shkvm type "hello" -d 50                # with 50ms delay between chars (default: 20ms)
+shkvm type "path{0x87}file"             # {0xNN} = raw HID keycode (0x87 = JIS ろ key)
+
+# Raw mode: no tag parsing, actual line breaks become Enter, tab chars become Tab
+# Recommended for multi-line/long text where modifier keys ({ctrl+c} etc.) are not needed
+shkvm type -r "line1
+line2
+"
+
+# Read from file (raw by default; use -t for tag interpretation)
+shkvm type -f commands.txt
+shkvm type -f commands.txt -t
+
+# Read from stdin (raw by default; use -t for tag interpretation)
+cat commands.txt | shkvm type
+cat commands.txt | shkvm type -f -
+
 shkvm key enter                         # single key press
 shkvm key c -m ctrl                     # Ctrl+C
 shkvm key f4 -m alt                     # Alt+F4
-shkvm keys '[{"key":"a"},{"key":"b"}]'  # key sequence (JSON)
-cat seq.json | shkvm keys               # JSON from stdin
+shkvm keys '[{"key":"a"},{"key":"b"}]'  # key sequence (default 100ms between steps)
+shkvm keys '[{"key":"tab"},{"key":"enter","delay_ms":500}]'  # per-step delay override
+cat seq.json | shkvm keys -d 200        # JSON from stdin, 200ms between steps
 ```
+
+**Mode defaults**: Text argument defaults to tag mode. Stdin and `--file` default to raw mode. Use `-r`/`--raw` or `-t`/`--tags` to override (mutually exclusive).
 
 ### Mouse
 ```
@@ -44,6 +62,16 @@ shkvm info                              # show device info (JSON)
 shkvm devices                           # list capture devices
 shkvm set-device 0                      # switch capture device
 shkvm set-resolution 1920 1080          # set capture resolution
+```
+
+## Supported Characters
+
+Only ASCII printable characters (space through `~`), tab, and newline can be typed. Unsupported characters (Unicode, CJK, accented, control characters) cause an error.
+
+**Base64 workaround** for unsupported characters or binary data:
+```
+echo "こんにちは" | base64 | shkvm type
+# On target: base64 -d
 ```
 
 ## Global Options

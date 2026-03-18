@@ -3,8 +3,6 @@
 import os
 from unittest import mock
 
-import pytest
-
 
 def _make_config():
     """Create a fresh Config instance (bypasses module-level singleton)."""

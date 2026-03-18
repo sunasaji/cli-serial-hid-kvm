@@ -10,9 +10,10 @@ import sys
 import time
 
 from PIL import Image
+from serial_hid_kvm.client import KvmClient, KvmClientError
+from serial_hid_kvm.hid_keycodes import validate_chars
 
 from .config import config
-from serial_hid_kvm.client import KvmClient, KvmClientError
 from .ocr import TerminalOCR
 
 _client: KvmClient | None = None
@@ -66,24 +67,83 @@ def _error(msg: str) -> int:
 
 
 def _read_input(arg_value: str | None, label: str) -> str:
-    """Return arg_value or stdin content; error if both or neither are given."""
+    """Return arg_value or stdin content; arg wins if both are given."""
     has_arg = arg_value is not None
     has_stdin = not sys.stdin.isatty()
-    if has_arg and has_stdin:
-        raise SystemExit(f"Error: {label} provided both as argument and via stdin")
     if not has_arg and not has_stdin:
         raise SystemExit(f"Error: {label} required as argument or via stdin")
     if has_arg:
+        if has_stdin:
+            sys.stdin.read()  # drain stdin
+        assert arg_value is not None
         return arg_value
     return sys.stdin.read()
 
 
+def _read_type_input(args: argparse.Namespace) -> tuple[str | None, bool, bool]:
+    """Resolve text input for the type command.
+
+    Returns (text_or_None, is_streaming, from_file_or_stdin).
+    is_streaming=True means caller should iterate sys.stdin line-by-line.
+    from_file_or_stdin=True means input came from --file or stdin (raw default).
+    """
+    has_stdin = not sys.stdin.isatty()
+
+    # --file takes highest priority; "-" means stdin
+    file_path = getattr(args, "file", None)
+    if file_path == "-":
+        if not has_stdin:
+            return None, False, True  # will trigger "required" error
+        return None, True, True  # stream stdin
+    if file_path:
+        with open(file_path, encoding="utf-8") as f:
+            return f.read(), False, True
+
+    text = args.text
+
+    # Explicit text argument wins; ignore residual stdin
+    if text is not None:
+        if has_stdin:
+            # Drain stdin to avoid leaking into subsequent pipeline commands
+            sys.stdin.read()
+        return text, False, False
+
+    # No text arg — try stdin
+    if has_stdin:
+        return None, True, True  # stream stdin
+
+    return None, False, False  # nothing provided
+
+
 def cmd_type(args: argparse.Namespace) -> int:
     client = get_client()
-    text = _read_input(args.text, "text")
-    client.type_text(text, args.delay, raw=args.raw)
-    print(f"Typed {len(text)} characters")
-    return 0
+
+    text, is_streaming, from_file_or_stdin = _read_type_input(args)
+
+    # Determine raw mode: explicit flags win, otherwise default by source
+    if args.raw:
+        raw = True
+    elif args.tags:
+        raw = False
+    else:
+        raw = from_file_or_stdin  # file/stdin default raw, positional default tags
+
+    if text is not None:
+        validate_chars(text)
+        client.type_text(text, args.delay, raw=raw)
+        print(f"Typed {len(text)} characters")
+        return 0
+
+    if is_streaming:
+        total_chars = 0
+        for line in sys.stdin:
+            validate_chars(line)
+            client.type_text(line, args.delay, raw=raw)
+            total_chars += len(line)
+        print(f"Typed {total_chars} characters")
+        return 0
+
+    return _error("Error: text required as argument, via stdin, or with --file")
 
 
 def cmd_key(args: argparse.Namespace) -> int:
@@ -227,10 +287,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     # type
     p = sub.add_parser("type", help="Type text with inline tags")
-    p.add_argument("text", nargs="?", default=None, help='Text to type, e.g. "ls -la{enter}"')
+    p.add_argument("text", nargs="?", default=None,
+                   help='Text to type, e.g. "ls -la{enter}". '
+                        "Reads from stdin if omitted.")
     p.add_argument("-d", "--delay", type=int, default=None, help="Delay between chars (ms)")
-    p.add_argument("-r", "--raw", action="store_true",
-                   help="Disable tag interpretation; newlines become Enter")
+    p.add_argument("-f", "--file", metavar="PATH",
+                   help='Read text from a file (use "-" for stdin)')
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument("-r", "--raw", action="store_true",
+                      help="Disable tag interpretation; actual line breaks become Enter")
+    mode.add_argument("-t", "--tags", action="store_true",
+                      help="Enable {tag} interpretation (default for text arg; "
+                           "use with -f/stdin to override raw default)")
     p.set_defaults(func=cmd_type)
 
     # key

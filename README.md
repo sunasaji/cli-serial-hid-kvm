@@ -54,9 +54,9 @@ shkvm exec "echo hello" -w 2        # run command and read output
 
 | Command | Description |
 |---|---|
-| `shkvm type [TEXT] [-d MS] [-r]` | Type text with optional char delay. Supports inline tags: `{enter}`, `{tab}`, `{ctrl+c}`, `{0xNN}`. Whitelist-based: unknown `{content}` passes through literally. `-r` (raw mode) disables tags, `\n` → Enter. Text can be passed via stdin instead of argument |
+| `shkvm type [TEXT] [-f FILE] [-d MS] [-r\|-t]` | Type text with optional char delay. `-d` sets delay between each keystroke in milliseconds (default: 20ms). Supports inline tags: `{enter}`, `{tab}`, `{ctrl+c}`, `{0xNN}`. Whitelist-based: unknown `{content}` passes through literally. `-r` (raw mode) disables tags; actual line breaks in the input become Enter. `-f` reads from file (`-f -` for explicit stdin). Text arg defaults to tag mode; stdin/file default to raw mode. Use `-t` to enable tags for stdin/file |
 | `shkvm key KEY [-m MOD]` | Send single key press. `-m` can be repeated: `-m ctrl -m shift` |
-| `shkvm keys [JSON] [-d MS]` | Send key sequence from JSON array. JSON can be passed via stdin instead of argument |
+| `shkvm keys [JSON] [-d MS]` | Send key sequence from JSON array. `-d` sets default delay between steps in milliseconds (default: 100ms); each step can override with `delay_ms`. JSON can be passed via stdin instead of argument |
 
 ### Mouse
 
@@ -84,21 +84,59 @@ shkvm exec "echo hello" -w 2        # run command and read output
 | `shkvm set-device DEV` | Switch capture device by index or path |
 | `shkvm set-resolution W H` | Set capture resolution |
 
-### Stdin Support
+### Stdin and File Input
 
-`type` and `keys` accept input from stdin instead of a positional argument. If both are provided, the command exits with an error.
+When the text argument is omitted, `type` reads from stdin line by line. Use `--file`/`-f` to read from a file, or `-f -` for explicit stdin.
+
+Stdin and file input **default to raw mode** (no tag interpretation), since the typical use case is piping file/program output. Use `-t`/`--tags` to enable tag interpretation for these sources.
 
 ```bash
-# Pass text via stdin
-echo "hello world" | shkvm type
-cat script.txt | shkvm type -r
+# Pipe from another command (raw by default)
+echo "ls -la" | shkvm type
 
+# Explicit stdin with "-f -"
+cat commands.txt | shkvm type -f -
+
+# Read from a file directly (raw by default)
+shkvm type -f commands.txt
+
+# File input with tag interpretation
+shkvm type -f commands.txt -t
+
+# Streaming (line-by-line as data arrives)
+tail -f commands.fifo | shkvm type
+```
+
+If both a text argument and stdin are present, the text argument wins (stdin is ignored).
+
+`-r`/`--raw` and `-t`/`--tags` are mutually exclusive.
+
+`keys` also accepts input from stdin. If both argument and stdin are present, the argument wins.
+
+```bash
 # Pass JSON via stdin
 echo '[{"key":"enter"}]' | shkvm keys
 cat sequence.json | shkvm keys -d 200
+```
 
-# Error: both argument and stdin
-echo "hello" | shkvm type "world"   # => Error
+### Supported Characters
+
+HID keyboard input supports ASCII printable characters (`a-z`, `A-Z`, `0-9`, symbols, space), tab, and newline. Characters outside this set (Unicode, CJK, accented characters, control characters, etc.) cause an error.
+
+In **tag mode** (default for text arg), special keys can be embedded as `{enter}`, `{tab}`, `{ctrl+c}`, `{0xNN}`, etc. `{0xNN}` allows sending any HID keycode by its hex value (0x00–0xFF), which is useful for keys that have no named tag — for example, `{0x87}` sends the JIS `ろ` key (International1, HID 0x87). Modifiers can be combined: `{shift+0x87}`. In **raw mode** (default for stdin/file), actual line break bytes in the input (LF 0x0A, CRLF 0x0D 0x0A, CR 0x0D) are sent as Enter and actual tab bytes (0x09) as Tab, with no tag interpretation. Two-character sequences like `\` `n` are not interpreted as control characters and are typed literally.
+
+If the target PC uses a non-US keyboard layout, configure `--target-layout` on the KVM server (e.g. `jp106`, `uk105`, `de105`, `fr105`).
+
+**Base64 workaround** for unsupported characters or binary data — encode on the host, decode on the target:
+
+```bash
+# Transfer text containing Unicode
+echo "こんにちは世界" | base64 | shkvm type
+shkvm exec "base64 -d <<< $(echo 'こんにちは世界' | base64)" -w 2
+
+# Transfer a file via base64
+base64 < file.bin | shkvm type
+# Then on target: paste into `base64 -d > file.bin` and Ctrl+D
 ```
 
 ### Global Options
