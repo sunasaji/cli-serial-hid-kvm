@@ -6,6 +6,7 @@
 
 ### Keyboard
 ```
+printf 'ls -la\n' | shkvm type          # type text via stdin (raw mode, \n becomes Enter)
 shkvm type "ls -la{enter}"              # type text (tag mode, default for text arg)
 shkvm type "hello" -d 50                # with 50ms delay between chars (default: 20ms)
 shkvm type "path{0x87}file"             # {0xNN} = raw HID keycode (0x87 = JIS ろ key)

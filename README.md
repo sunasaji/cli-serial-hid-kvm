@@ -33,6 +33,10 @@ cd cli-serial-hid-kvm
 pip install -e .
 ```
 
+## For LLM Agents
+
+If you are an LLM agent, see [SHKVM.md](SHKVM.md) for a concise CLI reference including all commands, options, supported characters, and environment variables.
+
 ## Quick Start
 
 ```bash
@@ -41,8 +45,7 @@ serial-hid-kvm --headless --api
 
 # Use shkvm from any machine that can reach the server
 shkvm info                          # check connection
-shkvm type "ls -la{enter}"          # type on target PC
-echo "ls -la{enter}" | shkvm type   # same, via stdin
+printf 'ls -la\n' | shkvm type      # type on target PC (raw mode, \n becomes Enter)
 shkvm capture -o screen.jpg         # take screenshot
 shkvm ocr                           # read screen text
 shkvm exec "echo hello" -w 2        # run command and read output
@@ -91,8 +94,8 @@ When the text argument is omitted, `type` reads from stdin line by line. Use `--
 Stdin and file input **default to raw mode** (no tag interpretation), since the typical use case is piping file/program output. Use `-t`/`--tags` to enable tag interpretation for these sources.
 
 ```bash
-# Pipe from another command (raw by default)
-echo "ls -la" | shkvm type
+# Pipe from another command (raw by default; \n becomes Enter)
+printf 'ls -la\n' | shkvm type
 
 # Explicit stdin with "-f -"
 cat commands.txt | shkvm type -f -
@@ -159,4 +162,4 @@ All settings can be configured via environment variables:
 
 ## License
 
-MIT
+[MIT](LICENSE)
