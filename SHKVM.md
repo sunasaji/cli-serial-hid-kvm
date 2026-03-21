@@ -35,6 +35,8 @@ cat seq.json | shkvm keys -d 200        # JSON from stdin, 200ms between steps
 
 **Mode defaults**: Text argument defaults to tag mode. Stdin and `--file` default to raw mode. Use `-r`/`--raw` or `-t`/`--tags` to override (mutually exclusive).
 
+**Available tags**: `enter`/`return`, `space`, `tab`, `backspace`, `delete`, `insert`, `escape`/`esc`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown`, `f1`–`f12`, `capslock`, `numlock`, `scrolllock`, `printscreen`, `pause`, `0x00`–`0xFF` (raw HID keycode). Modifiers: `ctrl`/`lctrl`/`rctrl`, `shift`/`lshift`/`rshift`, `alt`/`lalt`/`ralt`, `win`/`lwin`/`rwin`/`gui`/`super`/`meta` — combine with `+`: `{ctrl+c}`, `{ctrl+shift+del}`, `{shift+0x87}`. Unknown `{content}` passes through literally.
+
 ### Mouse
 ```
 shkvm move 500 300                      # move to absolute position

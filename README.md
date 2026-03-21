@@ -126,7 +126,24 @@ cat sequence.json | shkvm keys -d 200
 
 HID keyboard input supports ASCII printable characters (`a-z`, `A-Z`, `0-9`, symbols, space), tab, and newline. Characters outside this set (Unicode, CJK, accented characters, control characters, etc.) cause an error.
 
-In **tag mode** (default for text arg), special keys can be embedded as `{enter}`, `{tab}`, `{ctrl+c}`, `{0xNN}`, etc. `{0xNN}` allows sending any HID keycode by its hex value (0x00–0xFF), which is useful for keys that have no named tag — for example, `{0x87}` sends the JIS `ろ` key (International1, HID 0x87). Modifiers can be combined: `{shift+0x87}`. In **raw mode** (default for stdin/file), actual line break bytes in the input (LF 0x0A, CRLF 0x0D 0x0A, CR 0x0D) are sent as Enter and actual tab bytes (0x09) as Tab, with no tag interpretation. Two-character sequences like `\` `n` are not interpreted as control characters and are typed literally.
+In **tag mode** (default for text arg), special keys can be embedded as `{enter}`, `{tab}`, `{ctrl+c}`, `{0xNN}`, etc.
+
+Available tags:
+
+| Category | Tags |
+|---|---|
+| Enter / Space | `enter`, `return`, `space` |
+| Navigation | `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown` |
+| Editing | `backspace`, `delete`, `insert`, `tab` |
+| Escape / Cancel | `escape`, `esc` |
+| Function keys | `f1` – `f12` |
+| Lock keys | `capslock`, `numlock`, `scrolllock` |
+| System | `printscreen`, `pause` |
+| Modifiers | `ctrl`, `shift`, `alt`, `win`, `gui`, `super`, `meta` |
+| Left/right modifiers | `lctrl`, `rctrl`, `lshift`, `rshift`, `lalt`, `ralt`, `lwin`, `rwin` |
+| Raw HID keycode | `0x00` – `0xFF` |
+
+Modifiers are combined with `+`: `{ctrl+c}`, `{ctrl+shift+del}`, `{shift+0x87}`. `{0xNN}` allows sending any HID keycode by its hex value, which is useful for keys that have no named tag — for example, `{0x87}` sends the JIS `ろ` key (International1, HID 0x87). In **raw mode** (default for stdin/file), actual line break bytes in the input (LF 0x0A, CRLF 0x0D 0x0A, CR 0x0D) are sent as Enter and actual tab bytes (0x09) as Tab, with no tag interpretation. Two-character sequences like `\` `n` are not interpreted as control characters and are typed literally.
 
 If the target PC uses a non-US keyboard layout, configure `--target-layout` on the KVM server (e.g. `jp106`, `uk105`, `de105`, `fr105`).
 
